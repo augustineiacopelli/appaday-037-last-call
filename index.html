@@ -292,9 +292,10 @@
   var ghosts = [];
 
   function ghostSpeedForLevel(lvl) {
-    if (lvl <= 1) return 1;
-    if (lvl <= 3) return 2;
-    return 4;
+    if (lvl <= 2) return 1;
+    if (lvl <= 5) return 2;
+    if (lvl <= 9) return 4;
+    return 7;
   }
 
   function resetGhosts() {
