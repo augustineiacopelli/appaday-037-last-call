@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Last Call | AppADay 037</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
+    background: #1c1209;
+    background-image:
+      radial-gradient(ellipse at top, #3a2614 0%, #1c1209 60%);
+    color: #f3e2c0;
+    font-family: Georgia, 'Times New Roman', serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    touch-action: none;
+  }
+  h1 {
+    margin: 4px 0 2px;
+    font-family: Impact, 'Arial Black', sans-serif;
+    letter-spacing: 2px;
+    font-size: 1.9rem;
+    color: #ffce5c;
+    text-shadow: 0 0 6px #ff8c00, 0 0 14px #d2480f, 0 2px 0 #5c2e00;
+  }
+  .tagline {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: #c9a876;
+    font-style: italic;
+  }
+  main {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    gap: 4px;
+    min-height: 0;
+  }
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 1rem;
+    color: #ffd98e;
+    padding: 4px 10px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+  .hud span { font-weight: bold; }
+  .stage {
+    position: relative;
+    background: #120a04;
+    overflow: hidden;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    touch-action: none;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,6,2,0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h2 {
+    font-family: Impact, 'Arial Black', sans-serif;
+    color: #ffce5c;
+    text-shadow: 0 0 8px #ff8c00;
+    margin: 0;
+    font-size: 1.6rem;
+    letter-spacing: 2px;
+  }
+  .overlay p { margin: 0; color: #f3e2c0; font-size: 0.95rem; }
+  .overlay button, .start-btn {
+    margin-top: 6px;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #2b1700;
+    background: linear-gradient(180deg, #ffd98e, #ffb627);
+    border: none;
+    border-radius: 24px;
+    padding: 10px 26px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #8a5a1c;
+  }
+  .portfolio-link {
+    margin-top: 8px;
+    color: #ffb627;
+    text-decoration: none;
+    font-size: 0.8rem;
+    border: 1px solid #6b4423;
+    border-radius: 20px;
+    padding: 4px 14px;
+    background: rgba(0,0,0,0.25);
+  }
+  .overlay p {
+    max-width: 380px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="hud">
+    <span>Level: <span id="level">1</span></span>
+    <span>Score: <span id="score">0</span></span>
+    <span>High: <span id="high">0</span></span>
+    <span>Lives: <span id="lives">🍺🍺🍺</span></span>
+  </div>
+
+  <div class="stage">
+    <canvas id="game"></canvas>
+
+    <div class="overlay" id="startOverlay">
+      <h1>LAST CALL</h1>
+      <p class="tagline">Make the rounds before the barflies catch you.</p>
+      <p>Steer the bartender 🍺 around the bar tables, sweeping up barley
+      kernels and the occasional pretzel 🥨. Grab a hop cone and the barflies
+      go woozy — chase them down before last call wears off.</p>
+      <p>On a touchscreen, swipe anywhere to set direction. On a keyboard,
+      use arrow keys or WASD.</p>
+      <button class="start-btn" id="startBtn">Open the Bar</button>
+      <a class="portfolio-link" href="https://augustineiacopelli.github.io/appaday/">&larr; AppADay Portfolio · #037</a>
+    </div>
+
+    <div class="overlay hidden" id="endOverlay">
+      <h2 id="endTitle">LAST CALL</h2>
+      <p id="endMsg"></p>
+      <button id="restartBtn">Reopen the Bar</button>
+      <a class="portfolio-link" href="https://augustineiacopelli.github.io/appaday/">&larr; AppADay Portfolio · #037</a>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var TILE = 28;
+
+  // Row-pattern building blocks, each col1/col11 always open so every
+  // combination remains fully connected via the outer loop corridors.
+  var A  = "#...........#"; // fully open
+  var B  = "#.##.###.##.#"; // classic ladder block
+  var C  = "#o##.....##o#"; // ladder block with hop cones
+  var D  = "#.###.#.###.#"; // narrow corridor block (col5/col7 open)
+  var E  = "#.....#.....#"; // center aisle
+  var F  = "#.#########.#"; // long table / seating row
+  var C2 = "#o.........o#"; // open row with hop cones
+  var G  = "#.#.#.#.#.#.#"; // pillar row (col5/col7 open)
+
+  var MAZES = [
+    // Theme 0: The Tap Room (classic bar tables)
+    [ "#############", A, B, C, B, A, D, E, D, A, B, C, B, A, "#############" ],
+    // Theme 1: The Biergarten (long picnic tables)
+    [ "#############", A, F, C2, F, A, G, E, G, A, F, C2, F, A, "#############" ],
+    // Theme 2: The Nightclub (open dance floor, speaker pillars)
+    [ "#############", A, G, A, G, A, G, E, G, A, G, A, G, A, "#############" ],
+    // Theme 3: The Venue (stage seating blocks)
+    [ "#############", A, B, D, C, A, D, E, D, A, C, D, B, A, "#############" ]
+  ];
+
+  var THEMES = [
+    { name: "The Tap Room",  wallTop: "#7a4a22", wallBottom: "#4a2c12", wallStroke: "#c98a3f", bg: "#120a04" },
+    { name: "The Biergarten", wallTop: "#7a8a3a", wallBottom: "#4a5a1c", wallStroke: "#cdd97a", bg: "#15170a" },
+    { name: "The Nightclub", wallTop: "#7a2a6a", wallBottom: "#2a1240", wallStroke: "#ff7fd0", bg: "#0a0814" },
+    { name: "The Venue",     wallTop: "#8a2222", wallBottom: "#3a0c0c", wallStroke: "#ffb84a", bg: "#140505" }
+  ];
+
+  var ROWS = MAZES[0].length;
+  var COLS = MAZES[0][0].length;
+
+  function getMaze(lvl) {
+    return MAZES[(lvl - 1) % MAZES.length];
+  }
+
+  function getTheme(lvl) {
+    return THEMES[(lvl - 1) % THEMES.length];
+  }
+
+  function buildGrid(mazeArr) {
+    var g = [];
+    for (var r = 0; r < ROWS; r++) g.push(mazeArr[r].split(""));
+    return g;
+  }
+
+  function countDots(g) {
+    var n = 0;
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        if (g[r][c] === "." || g[r][c] === "o") n++;
+      }
+    }
+    return n;
+  }
+
+  // mutable grid copy so we can "eat" dots
+  var grid = buildGrid(getMaze(1));
+  var totalDots = countDots(grid);
+
+  var canvas = document.getElementById("game");
+  var ctx = canvas.getContext("2d");
+  var stageEl = document.querySelector(".stage");
+  var scaleX = 1, scaleY = 1;
+
+  function resizeCanvas() {
+    var w = stageEl.clientWidth;
+    var h = stageEl.clientHeight;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    scaleX = canvas.width / (COLS * TILE);
+    scaleY = canvas.height / (ROWS * TILE);
+    draw();
+  }
+  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("orientationchange", function () {
+    setTimeout(resizeCanvas, 200);
+  });
+
+  var DIRS = {
+    up: { x: 0, y: -1 },
+    down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 },
+    none: { x: 0, y: 0 }
+  };
+
+  function cellAt(px, py) {
+    return { r: Math.round(py / TILE), c: Math.round(px / TILE) };
+  }
+
+  function isWall(r, c) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return true;
+    return grid[r][c] === "#";
+  }
+
+  function aligned(px, py, tolerance) {
+    var t = tolerance || 0.01;
+    var mx = px % TILE, my = py % TILE;
+    return (mx < t || mx > TILE - t) && (my < t || my > TILE - t);
+  }
+
+  function snap(v) {
+    return Math.round(v / TILE) * TILE;
+  }
+
+  function canEnter(px, py, dir) {
+    var cell = cellAt(px, py);
+    var nr = cell.r + dir.y;
+    var nc = cell.c + dir.x;
+    return !isWall(nr, nc);
+  }
+
+  // ---- player ----
+  var player = {
+    px: 6 * TILE, py: 13 * TILE,
+    dir: DIRS.none, queued: DIRS.none,
+    facing: "right",
+    speed: 2
+  };
+
+  // ---- ghosts (barflies) ----
+  var ghostDefs = [
+    { px: 5 * TILE, py: 6 * TILE, color: "#e34b4b" },
+    { px: 7 * TILE, py: 6 * TILE, color: "#7c8cff" },
+    { px: 5 * TILE, py: 8 * TILE, color: "#ff7fd0" },
+    { px: 7 * TILE, py: 8 * TILE, color: "#ffa64b" }
+  ];
+  var ghosts = [];
+
+  function ghostSpeedForLevel(lvl) {
+    if (lvl <= 1) return 1;
+    if (lvl <= 3) return 2;
+    return 4;
+  }
+
+  function resetGhosts() {
+    var spd = ghostSpeedForLevel(level);
+    ghosts = ghostDefs.map(function (g, i) {
+      return {
+        px: g.px, py: g.py,
+        startPx: g.px, startPy: g.py,
+        color: g.color,
+        index: i,
+        dir: randomDir({ r: g.py / TILE, c: g.px / TILE }, DIRS.none),
+        vulnerable: false,
+        active: true,
+        speed: spd
+      };
+    });
+  }
+
+  function validDirs(r, c, exclude) {
+    var out = [];
+    for (var k in DIRS) {
+      var d = DIRS[k];
+      if (d.x === 0 && d.y === 0) continue;
+      if (exclude && d.x === exclude.x && d.y === exclude.y) continue;
+      if (!isWall(r + d.y, c + d.x)) out.push(d);
+    }
+    if (out.length === 0) {
+      for (var k2 in DIRS) {
+        var d2 = DIRS[k2];
+        if (d2.x === 0 && d2.y === 0) continue;
+        if (!isWall(r + d2.y, c + d2.x)) out.push(d2);
+      }
+    }
+    return out;
+  }
+
+  function randomDir(cell, current) {
+    var opts = validDirs(Math.round(cell.r), Math.round(cell.c), current);
+    return opts[Math.floor(Math.random() * opts.length)];
+  }
+
+  function ghostTarget(g, cell) {
+    var pc = cellAt(player.px, player.py);
+    switch (g.index) {
+      case 0: // direct chase
+        return pc;
+      case 1: // ambush a few tiles ahead of player's facing direction
+        var pdir = DIRS[player.facing] || DIRS.right;
+        return { r: pc.r + pdir.y * 4, c: pc.c + pdir.x * 4 };
+      case 2: // patrols a far corner
+        return { r: 0, c: COLS - 1 };
+      default: // chases until close, then retreats to a corner
+        var dist = Math.abs(cell.r - pc.r) + Math.abs(cell.c - pc.c);
+        return dist > 8 ? pc : { r: ROWS - 1, c: 0 };
+    }
+  }
+
+  function chooseGhostDir(g) {
+    var cell = cellAt(g.px, g.py);
+    var reverse = { x: -g.dir.x, y: -g.dir.y };
+    var opts = validDirs(cell.r, cell.c, reverse);
+    if (g.vulnerable) {
+      return opts[Math.floor(Math.random() * opts.length)];
+    }
+    var target = ghostTarget(g, cell);
+    var best = opts[0];
+    var bestDist = Infinity;
+    for (var i = 0; i < opts.length; i++) {
+      var d = opts[i];
+      var nr = cell.r + d.y, nc = cell.c + d.x;
+      var dist = (nr - target.r) * (nr - target.r) + (nc - target.c) * (nc - target.c);
+      if (dist < bestDist) { bestDist = dist; best = d; }
+    }
+    return best;
+  }
+
+  // ---- pretzel bonus ----
+  var pretzel = {
+    r: 1, c: 6,
+    active: false,
+    timer: 0,
+    interval: 540,   // ~9s @60fps until it appears
+    duration: 300    // ~5s visible
+  };
+
+  // ---- power mode ----
+  var powerTimer = 0;
+  var POWER_DURATION = 420; // ~7s
+
+  // ---- game state ----
+  var score = 0;
+  var lives = 3;
+  var level = 1;
+  var frame = 0;
+  var running = false;
+  var paused = false;
+  var dotsLeft = totalDots;
+  var highScore = 0;
+  var nextLifeBonus = 10000;
+  try {
+    highScore = parseInt(localStorage.getItem("lastcall_high") || "0", 10) || 0;
+  } catch (e) {}
+
+  document.getElementById("high").textContent = highScore;
+
+  function livesDisplay() {
+    var s = "";
+    for (var i = 0; i < lives; i++) s += "🍺";
+    return s || "—";
+  }
+
+  function updateHud() {
+    while (score >= nextLifeBonus) {
+      lives++;
+      addPopup(player.px + TILE / 2, player.py + TILE / 2 - 10, "Extra Beer!");
+      nextLifeBonus += 10000;
+    }
+    document.getElementById("score").textContent = score;
+    document.getElementById("lives").textContent = livesDisplay();
+    document.getElementById("level").textContent = level;
+  }
+
+  var levelBanner = 0;
+  var popups = [];
+
+  function addPopup(px, py, text) {
+    popups.push({ x: px, y: py, life: 45, text: text });
+  }
+
+  function levelComplete() {
+    level++;
+    paused = true;
+    levelBanner = 120;
+    setTimeout(function () {
+      grid = buildGrid(getMaze(level));
+      totalDots = countDots(grid);
+      dotsLeft = totalDots;
+      pretzel.active = false;
+      pretzel.timer = 0;
+      popups = [];
+      resetPositions();
+      updateHud();
+      paused = false;
+    }, 1400);
+    updateHud();
+  }
+
+  // ---- debug: jump to a level instantly (number keys 1-9, [ / ] to step) ----
+  function debugJumpToLevel(n) {
+    if (!running) return;
+    level = Math.max(1, n);
+    grid = buildGrid(getMaze(level));
+    totalDots = countDots(grid);
+    dotsLeft = totalDots;
+    pretzel.active = false;
+    pretzel.timer = 0;
+    popups = [];
+    paused = false;
+    levelBanner = 60;
+    resetPositions();
+    updateHud();
+  }
+  window.addEventListener("keydown", function (e) {
+    if (/^[1-9]$/.test(e.key)) debugJumpToLevel(parseInt(e.key, 10));
+    else if (e.key === "]") debugJumpToLevel(level + 1);
+    else if (e.key === "[") debugJumpToLevel(level - 1);
+  });
+
+  function setQueued(dirName) {
+    player.queued = DIRS[dirName];
+    player.facing = dirName;
+  }
+
+  // ---- input ----
+  var isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+  if (!isTouchDevice) {
+    window.addEventListener("keydown", function (e) {
+      switch (e.key) {
+        case "ArrowUp": case "w": case "W": setQueued("up"); e.preventDefault(); break;
+        case "ArrowDown": case "s": case "S": setQueued("down"); e.preventDefault(); break;
+        case "ArrowLeft": case "a": case "A": setQueued("left"); e.preventDefault(); break;
+        case "ArrowRight": case "d": case "D": setQueued("right"); e.preventDefault(); break;
+      }
+    });
+  } else {
+    var touchStartX = 0, touchStartY = 0;
+    document.addEventListener("touchstart", function (e) {
+      var t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+    }, { passive: true });
+    document.addEventListener("touchend", function (e) {
+      var t = e.changedTouches[0];
+      var dx = t.clientX - touchStartX;
+      var dy = t.clientY - touchStartY;
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        setQueued(dx > 0 ? "right" : "left");
+      } else {
+        setQueued(dy > 0 ? "down" : "up");
+      }
+    }, { passive: true });
+  }
+
+  // ---- update loop ----
+  function resetPositions() {
+    player.px = 6 * TILE; player.py = 13 * TILE;
+    player.dir = DIRS.none; player.queued = DIRS.none; player.facing = "right";
+    resetGhosts();
+    powerTimer = 0;
+  }
+
+  function loseLife() {
+    lives--;
+    updateHud();
+    if (lives <= 0) {
+      endGame(false);
+    } else {
+      paused = true;
+      setTimeout(function () {
+        resetPositions();
+        paused = false;
+      }, 900);
+    }
+  }
+
+  function eatCell(r, c) {
+    var ch = grid[r][c];
+    if (ch === ".") {
+      grid[r][c] = " ";
+      score += 10;
+      dotsLeft--;
+    } else if (ch === "o") {
+      grid[r][c] = " ";
+      score += 50;
+      dotsLeft--;
+      powerTimer = POWER_DURATION;
+      ghosts.forEach(function (g) {
+        if (!g.active) return;
+        g.vulnerable = true;
+        var rev = { x: -g.dir.x, y: -g.dir.y };
+        if (!isWall(cellAt(g.px, g.py).r + rev.y, cellAt(g.px, g.py).c + rev.x)) {
+          g.dir = rev;
+        }
+      });
+    }
+    updateHud();
+    if (dotsLeft <= 0) levelComplete();
+  }
+
+  function endGame(won) {
+    running = false;
+    if (score > highScore) {
+      highScore = score;
+      try { localStorage.setItem("lastcall_high", String(highScore)); } catch (e) {}
+      document.getElementById("high").textContent = highScore;
+    }
+    var overlay = document.getElementById("endOverlay");
+    document.getElementById("endTitle").textContent = won ? "BAR'S CLEAN!" : "TIME TO GO HOME";
+    document.getElementById("endMsg").textContent = won
+      ? "Every last kernel swept up. Final score: " + score
+      : "The barflies got the better of you. Final score: " + score;
+    overlay.classList.remove("hidden");
+  }
+
+  function update() {
+    frame++;
+
+    // player movement
+    if (aligned(player.px, player.py)) {
+      player.px = snap(player.px);
+      player.py = snap(player.py);
+      if (player.queued.x !== 0 || player.queued.y !== 0) {
+        if (canEnter(player.px, player.py, player.queued)) {
+          player.dir = player.queued;
+        }
+      }
+      if (!canEnter(player.px, player.py, player.dir)) {
+        player.dir = DIRS.none;
+      }
+      var cell = cellAt(player.px, player.py);
+      eatCell(cell.r, cell.c);
+    }
+    player.px += player.dir.x * player.speed;
+    player.py += player.dir.y * player.speed;
+
+    if (player.dir.x !== 0 || player.dir.y !== 0) {
+      if (player.dir.x === 1) player.facing = "right";
+      else if (player.dir.x === -1) player.facing = "left";
+      else if (player.dir.y === 1) player.facing = "down";
+      else if (player.dir.y === -1) player.facing = "up";
+    }
+
+    // power mode countdown
+    if (powerTimer > 0) {
+      powerTimer--;
+      if (powerTimer === 0) {
+        ghosts.forEach(function (g) { if (g.active) g.vulnerable = false; });
+      }
+    }
+
+    // ghosts
+    ghosts.forEach(function (g) {
+      if (!g.active) return;
+      if (aligned(g.px, g.py)) {
+        g.px = snap(g.px);
+        g.py = snap(g.py);
+        g.dir = chooseGhostDir(g);
+      }
+      var spd = g.vulnerable ? 1 : g.speed;
+      g.px += g.dir.x * spd;
+      g.py += g.dir.y * spd;
+    });
+
+    // pretzel timing
+    if (!pretzel.active) {
+      pretzel.timer++;
+      if (pretzel.timer >= pretzel.interval) {
+        pretzel.active = true;
+        pretzel.timer = 0;
+      }
+    } else {
+      pretzel.timer++;
+      if (pretzel.timer >= pretzel.duration) {
+        pretzel.active = false;
+        pretzel.timer = 0;
+      } else {
+        var pc = cellAt(player.px, player.py);
+        if (aligned(player.px, player.py) && pc.r === pretzel.r && pc.c === pretzel.c) {
+          score += 100;
+          addPopup(player.px + TILE / 2, player.py + TILE / 2, "+100");
+          pretzel.active = false;
+          pretzel.timer = 0;
+          updateHud();
+        }
+      }
+    }
+
+    // collisions
+    ghosts.forEach(function (g) {
+      if (!g.active) return;
+      var dx = g.px - player.px;
+      var dy = g.py - player.py;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < TILE * 0.55) {
+        if (g.vulnerable) {
+          score += 200;
+          addPopup(g.px + TILE / 2, g.py + TILE / 2, "+200");
+          updateHud();
+          g.active = false;
+        } else {
+          loseLife();
+        }
+      }
+    });
+
+    // never leave the bar empty: if every barfly's been kicked out,
+    // one sneaks back in from the side corridor to keep the chase going
+    if (ghosts.every(function (g) { return !g.active; })) {
+      var sneak = ghosts[0];
+      sneak.active = true;
+      sneak.vulnerable = false;
+      sneak.px = TILE; // col1 side corridor
+      sneak.py = TILE; // row1
+      sneak.dir = DIRS.down;
+      sneak.speed = ghostSpeedForLevel(level);
+    }
+  }
+
+  // ---- drawing ----
+  function drawWall(r, c) {
+    var x = c * TILE, y = r * TILE;
+    var theme = getTheme(level);
+    var grad = ctx.createLinearGradient(x, y, x, y + TILE);
+    grad.addColorStop(0, theme.wallTop);
+    grad.addColorStop(1, theme.wallBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+    ctx.strokeStyle = theme.wallStroke;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
+  }
+
+  function drawDot(r, c) {
+    var x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    var angle = ((r * 7 + c * 13) % 6) * 0.12 - 0.3; // slight per-cell tilt variation
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    var grad = ctx.createLinearGradient(-3, -5, 3, 5);
+    grad.addColorStop(0, "#f6dca0");
+    grad.addColorStop(0.5, "#e0b25a");
+    grad.addColorStop(1, "#c8923e");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 2.6, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // central crease
+    ctx.strokeStyle = "#a8742e";
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(0, -3.8);
+    ctx.lineTo(0, 3.8);
+    ctx.stroke();
+
+    // highlight
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(-0.9, -1.8, 0.8, 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawPellet(r, c) {
+    var x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    var pulse = 1 + 0.08 * Math.sin(frame * 0.15);
+    var h = 11 * pulse, w = 7 * pulse;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // body: tapering cone, wider near top, pointed at bottom
+    var grad = ctx.createLinearGradient(0, -h, 0, h);
+    grad.addColorStop(0, "#d8e36a");
+    grad.addColorStop(1, "#a9c23f");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, -h);
+    ctx.quadraticCurveTo(w, -h * 0.3, 0, h);
+    ctx.quadraticCurveTo(-w, -h * 0.3, 0, -h);
+    ctx.closePath();
+    ctx.fill();
+
+    // overlapping bract scales, rows tapering toward the tip
+    ctx.fillStyle = "#7fa030";
+    var rows = 4;
+    for (var i = 0; i < rows; i++) {
+      var rowY = -h * 0.55 + (i * (h * 1.5)) / (rows - 1);
+      var rowW = w * (1 - i / (rows + 1.5));
+      // left scale
+      ctx.beginPath();
+      ctx.moveTo(0, rowY - 2);
+      ctx.quadraticCurveTo(-rowW, rowY, -rowW * 0.6, rowY + 3);
+      ctx.quadraticCurveTo(-rowW * 0.3, rowY + 1, 0, rowY + 2);
+      ctx.closePath();
+      ctx.fill();
+      // right scale
+      ctx.beginPath();
+      ctx.moveTo(0, rowY - 2);
+      ctx.quadraticCurveTo(rowW, rowY, rowW * 0.6, rowY + 3);
+      ctx.quadraticCurveTo(rowW * 0.3, rowY + 1, 0, rowY + 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // center seam highlight
+    ctx.strokeStyle = "#c3d662";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.85);
+    ctx.lineTo(0, h * 0.85);
+    ctx.stroke();
+
+    // little stem at the base
+    ctx.strokeStyle = "#7a5c2e";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.75);
+    ctx.lineTo(0, h + 3);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawPretzel() {
+    if (!pretzel.active) return;
+    var x = pretzel.c * TILE + TILE / 2, y = pretzel.r * TILE + TILE / 2;
+    ctx.strokeStyle = "#a9692f";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(x - 4, y, 7, 6, 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + 4, y, 7, 6, -0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y - 7, 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#fff4d6";
+    [[-5,-2],[5,-2],[0,-9],[-2,4],[2,4]].forEach(function(p){
+      ctx.beginPath();
+      ctx.arc(x + p[0], y + p[1], 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function drawPlayer() {
+    var x = player.px + TILE / 2, y = player.py + TILE / 2;
+    var r = TILE / 2 - 2;
+    var mouth = 0.08 + 0.20 * Math.abs(Math.sin(frame * 0.25));
+    var angle, flip;
+    switch (player.facing) {
+      case "down": angle = Math.PI / 2; flip = 1; break;
+      case "up": angle = -Math.PI / 2; flip = 1; break;
+      case "left": angle = 0; flip = -1; break;
+      default: angle = 0; flip = 1; // right / idle
+    }
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.scale(flip, 1);
+
+    // head
+    var skin = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 1, 0, 0, r);
+    skin.addColorStop(0, "#ffd9a8");
+    skin.addColorStop(1, "#e8b27e");
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // slicked-back hair, a cap across the top of the head
+    ctx.fillStyle = "#4a2e16";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, Math.PI * 1.08, -Math.PI * 0.08);
+    ctx.fill();
+
+    // single leading eye, on the side facing the direction of travel
+    ctx.fillStyle = "#2b1700";
+    ctx.beginPath();
+    ctx.ellipse(r * 0.4, -r * 0.25, 1.8, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // chomping mouth opens toward the direction of travel
+    ctx.fillStyle = "#3a2010";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r, -mouth * Math.PI / 2, mouth * Math.PI / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // beer mug held at the bartender's side, trailing behind
+    ctx.save();
+    ctx.translate(-r * 1.1, r * 0.55);
+    ctx.fillStyle = "#f3c14a";
+    ctx.fillRect(-3.5, -5, 7, 9);
+    ctx.fillStyle = "#fff8e6";
+    ctx.fillRect(-3.5, -5, 7, 2.4);
+    ctx.strokeStyle = "#c9922e";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-3.5, -5, 7, 9);
+    ctx.strokeStyle = "#c9922e";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(4.5, -0.5, 2.4, -Math.PI * 0.6, Math.PI * 0.6);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawGhost(g) {
+    var wobble = Math.sin(frame * 0.18 + g.index * 1.7) * 1.6;
+    var x = g.px + TILE / 2 + wobble;
+    var y = g.py + TILE / 2 + Math.abs(wobble) * 0.4;
+    var r = TILE / 2 - 2;
+    var tilt = wobble * 0.05;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+
+    var hairColors = ["#5b3a1e", "#2b2b2b", "#a85c2e", "#caa44a"];
+    var skin = g.vulnerable ? "#aab4cf" : "#f2c79a";
+
+    // head
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (g.vulnerable) {
+      // dizzy spiral above head
+      ctx.strokeStyle = "#e8edf7";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for (var a = 0; a < Math.PI * 3; a += 0.3) {
+        var rr = a * 1.1;
+        ctx.lineTo(Math.cos(a + frame * 0.1) * rr * 0.18, -r * 1.1 - Math.sin(a + frame * 0.1) * rr * 0.18);
+      }
+      ctx.stroke();
+      // X eyes
+      ctx.strokeStyle = "#2b1700";
+      ctx.lineWidth = 1.6;
+      [-r * 0.35, r * 0.35].forEach(function (ex) {
+        ctx.beginPath();
+        ctx.moveTo(ex - 3, -3);
+        ctx.lineTo(ex + 3, 3);
+        ctx.moveTo(ex + 3, -3);
+        ctx.lineTo(ex - 3, 3);
+        ctx.stroke();
+      });
+      // flat woozy mouth
+      ctx.strokeStyle = "#7a4a30";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.4, r * 0.4);
+      ctx.quadraticCurveTo(0, r * 0.55, r * 0.4, r * 0.35);
+      ctx.stroke();
+    } else {
+      // messy hair tuft
+      ctx.fillStyle = hairColors[g.index % hairColors.length];
+      ctx.beginPath();
+      ctx.arc(0, -r * 0.55, r * 0.85, Math.PI * 1.1, Math.PI * 1.9);
+      for (var i = -3; i <= 3; i++) {
+        ctx.lineTo(i * r * 0.25, -r * (1.0 + (Math.abs(i) % 2) * 0.15));
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // droopy half-lidded eyes
+      [-r * 0.35, r * 0.35].forEach(function (ex) {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.ellipse(ex, -r * 0.05, 4, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#3a2418";
+        ctx.beginPath();
+        ctx.ellipse(ex + 0.8, 0, 1.8, 2.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = skin;
+        ctx.beginPath();
+        ctx.ellipse(ex, -r * 0.3, 4.5, 3, 0, 0, Math.PI);
+        ctx.fill();
+      });
+
+      // red flushed cheeks
+      ctx.fillStyle = "rgba(220,60,60,0.45)";
+      [-r * 0.6, r * 0.6].forEach(function (ex) {
+        ctx.beginPath();
+        ctx.ellipse(ex, r * 0.3, 3.5, 2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // red nose
+      ctx.fillStyle = "#d6573f";
+      ctx.beginPath();
+      ctx.arc(0, r * 0.15, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // crooked smile
+      ctx.strokeStyle = "#7a3a20";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.35, r * 0.45);
+      ctx.quadraticCurveTo(0, r * 0.65, r * 0.4, r * 0.4);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = getTheme(level).bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var ch = grid[r][c];
+        if (ch === "#") drawWall(r, c);
+        else if (ch === ".") drawDot(r, c);
+        else if (ch === "o") drawPellet(r, c);
+      }
+    }
+    drawPretzel();
+    drawPlayer();
+    ghosts.forEach(function (g) { if (g.active) drawGhost(g); });
+
+    for (var p = popups.length - 1; p >= 0; p--) {
+      var pop = popups[p];
+      var t = pop.life;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, t / 45);
+      ctx.fillStyle = "#fff4d6";
+      ctx.font = "bold 11px Georgia, serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(pop.text, pop.x, pop.y - (45 - t) * 0.5);
+      ctx.restore();
+      pop.life--;
+      if (pop.life <= 0) popups.splice(p, 1);
+    }
+
+    ctx.restore();
+
+    if (levelBanner > 0) {
+      levelBanner--;
+      ctx.save();
+      ctx.fillStyle = "rgba(10,6,2,0.55)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffce5c";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold " + Math.round(canvas.height * 0.08) + "px Impact, sans-serif";
+      ctx.fillText("LEVEL " + level, canvas.width / 2, canvas.height / 2 - canvas.height * 0.04);
+      ctx.font = Math.round(canvas.height * 0.035) + "px Georgia, serif";
+      ctx.fillStyle = "#f3e2c0";
+      ctx.fillText(getTheme(level).name, canvas.width / 2, canvas.height / 2 + canvas.height * 0.05);
+      ctx.restore();
+    }
+  }
+
+  function loop() {
+    if (running) {
+      if (!paused) update();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function startGame() {
+    grid = buildGrid(getMaze(level));
+    totalDots = countDots(grid);
+    dotsLeft = totalDots;
+    score = 0;
+    lives = 3;
+    level = 1;
+    nextLifeBonus = 10000;
+    paused = false;
+    pretzel.active = false;
+    pretzel.timer = 0;
+    popups = [];
+    resetPositions();
+    updateHud();
+    document.getElementById("startOverlay").classList.add("hidden");
+    document.getElementById("endOverlay").classList.add("hidden");
+    running = true;
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("restartBtn").addEventListener("click", startGame);
+
+  resetGhosts();
+  resizeCanvas();
+  draw();
+  loop();
+})();
+</script>
+</body>
+</html>
