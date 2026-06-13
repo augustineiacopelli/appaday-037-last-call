@@ -357,6 +357,10 @@
     var cell = cellAt(g.px, g.py);
     var reverse = { x: -g.dir.x, y: -g.dir.y };
     var opts = validDirs(cell.r, cell.c, reverse);
+    if (opts.length === 0) {
+      // last resort: keep going, or reverse if that's the only option
+      return (g.dir.x !== 0 || g.dir.y !== 0) ? g.dir : reverse;
+    }
     if (g.vulnerable) {
       return opts[Math.floor(Math.random() * opts.length)];
     }
@@ -537,9 +541,14 @@
       ghosts.forEach(function (g) {
         if (!g.active) return;
         g.vulnerable = true;
-        var rev = { x: -g.dir.x, y: -g.dir.y };
-        if (!isWall(cellAt(g.px, g.py).r + rev.y, cellAt(g.px, g.py).c + rev.x)) {
-          g.dir = rev;
+        if (aligned(g.px, g.py)) {
+          g.px = snap(g.px);
+          g.py = snap(g.py);
+          var rev = { x: -g.dir.x, y: -g.dir.y };
+          var cell = cellAt(g.px, g.py);
+          if (!isWall(cell.r + rev.y, cell.c + rev.x)) {
+            g.dir = rev;
+          }
         }
       });
     }
